@@ -1,0 +1,20 @@
+# Backend (.NET)
+backend/**/bin/
+backend/**/obj/
+backend/*.log
+*.user
+
+# Frontend (Angular)
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# IDE
+.idea/
+.vs/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+
+# OS
+.DS_Store
