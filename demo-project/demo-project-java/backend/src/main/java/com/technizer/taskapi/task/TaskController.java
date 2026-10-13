@@ -21,6 +21,11 @@ public class TaskController {
         return taskService.listForOwner(ownerId);
     }
 
+    @GetMapping("/{id}")
+    public Task get(@AuthenticationPrincipal Long ownerId, @PathVariable Long id) {
+        return taskService.getForOwner(ownerId, id);
+    }
+
     @PostMapping
     public Task create(@AuthenticationPrincipal Long ownerId, @RequestBody CreateTaskRequest request) {
         return taskService.create(ownerId, request.title(), request.description());

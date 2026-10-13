@@ -18,6 +18,13 @@ public class TaskService {
         return taskRepository.findByOwnerId(ownerId);
     }
 
+    public Task getForOwner(Long ownerId, Long taskId) {
+        // A task owned by someone else is reported as not found so its existence isn't leaked.
+        return taskRepository.findById(taskId)
+                .filter(t -> t.getOwnerId().equals(ownerId))
+                .orElseThrow(() -> new NoSuchElementException("Task not found: " + taskId));
+    }
+
     public Task create(Long ownerId, String title, String description) {
         Task task = new Task(title, description, ownerId);
         return taskRepository.save(task);

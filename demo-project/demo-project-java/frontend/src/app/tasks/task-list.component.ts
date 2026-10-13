@@ -1,12 +1,13 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { Task, TaskService } from './task.service';
 
 @Component({
   selector: 'app-task-list',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   template: `
     <div class="task-page">
       <h2>My Tasks</h2>
@@ -19,7 +20,7 @@ import { Task, TaskService } from './task.service';
 
       <ul>
         <li *ngFor="let task of tasks" [class.completed]="task.completed">
-          <span>{{ task.title }}</span>
+          <a [routerLink]="['/tasks', task.id]">{{ task.title }}</a>
           <div class="actions">
             <button *ngIf="!task.completed" (click)="complete(task)">Complete</button>
             <button (click)="remove(task)">Delete</button>
@@ -34,7 +35,7 @@ import { Task, TaskService } from './task.service';
       .new-task { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
       ul { list-style: none; padding: 0; }
       li { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; border-bottom: 1px solid #e5e7eb; }
-      li.completed span { text-decoration: line-through; color: #9ca3af; }
+      li.completed a { text-decoration: line-through; color: #9ca3af; }
       .actions button { margin-left: 0.25rem; }
     `,
   ],
