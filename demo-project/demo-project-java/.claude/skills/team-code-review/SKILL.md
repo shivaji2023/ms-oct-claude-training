@@ -1,5 +1,5 @@
 ---
-name: code-review
+name: team-code-review
 description: >
   Use this skill when the task involves reviewing, auditing or assessing
   code quality, security or test coverage in this Spring Boot / Angular codebase.
