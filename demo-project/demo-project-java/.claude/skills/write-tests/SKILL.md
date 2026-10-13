@@ -1,9 +1,10 @@
 ---
 name: write-tests
 description: >
-  Use this skill automatically whenever a new method, endpoint, or
-  component is added or modified in this Spring Boot / Angular codebase.
-  Do not wait to be asked.
+  Generate JUnit 5 (backend) and Jasmine (frontend) tests. Use automatically
+  whenever a method, endpoint, service, controller or component is added or
+  modified in this Spring Boot / Angular codebase, or when the user mentions
+  tests, test cases, coverage or "write tests". Do not wait to be asked.
 ---
 
 # Write Tests Skill
@@ -29,6 +30,8 @@ checks in `TaskService.markCompleted()`/`.delete()`, placeholder-only
 `TaskServiceTest`/`AuthServiceTest`). Write tests against actual current
 behavior — do not change production code to make the "correct" behavior
 pass, and do not treat these as bugs to fix unless explicitly asked.
+When a test pins down known-buggy behavior, add a comment such as
+`// KNOWN BUG: should reject expired token` so the bug stays visible.
 
 For controller tests involving authenticated/authorized endpoints, follow
 the existing pattern in the module (plain unit test with a mocked

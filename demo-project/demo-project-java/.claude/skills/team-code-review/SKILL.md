@@ -25,6 +25,8 @@ Cover all four dimensions, in order:
 - List methods/functions with no test coverage
 - Identify missing edge cases
 - Suggest specific test cases with example inputs/outputs
+- Report gaps only — do not write or modify test files during a review
+  (the write-tests skill handles that)
 
 ## 4. Code Quality
 - Flag violations of CLAUDE.md standards
