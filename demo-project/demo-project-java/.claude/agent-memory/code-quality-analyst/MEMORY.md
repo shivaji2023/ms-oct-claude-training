@@ -1,0 +1,1 @@
+- [Auth module known issues](auth-module-known-issues.md) — recurring quality findings and test gaps in backend/frontend auth code

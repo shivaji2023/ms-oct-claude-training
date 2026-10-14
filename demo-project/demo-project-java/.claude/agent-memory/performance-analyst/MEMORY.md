@@ -1,0 +1,1 @@
+- [Auth perf baseline](auth-perf-baseline.md) — verified-clean items and open perf issues in auth/user/security/frontend auth
