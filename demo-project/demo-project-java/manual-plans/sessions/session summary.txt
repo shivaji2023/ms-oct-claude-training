@@ -1,0 +1,899 @@
+ ▐▛███▛█   Claude Code v2.1.299
+▝▜██████▀  Sonnet 5.5 · Claude Max
+ ▝▝   ▝▝   D:\Github - Manish\ms-oct-claude-training\demo-project\demo-proj…
+
+
+❯ ask the security-analyst to audit "d:\Github -                                
+  Manish\ms-oct-claude-training\demo-project\demo-project-java\backend\src\main 
+  \java\com\technizer\taskapi\auth\AuthService.java"                            
+
+● security-analyst(Security audit of AuthService)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● The security-analyst is now auditing AuthService.java in the background. I'll
+  relay its findings when it finishes.
+
+✻ Brewed for 11s · done 11:15 AM
+
+› Message from security-analyst
+  # Security audit: AuthService.java and its auth flow
+
+  I found 13 issues. One Critical is unverified: I couldn't open
+  `application.properties`. The most important correction: the `isTokenValid()`
+  stub does not actually let expired tokens through, so it is Medium, not
+  Critical. No source files were modified.
+
+  **Files read:** `AuthService.java`, `AuthController.java`, `JwtUtil.java`,
+  `JwtAuthFilter.java`, `AuthRateLimitFilter.java`, `SecurityConfig.java`,
+  `GlobalExceptionHandler.java`, `User.java`, `UserRepository.java`,
+  `README.md`, `backend/CLAUDE.md`. I also ran `mvn dependency:tree`.
+
+  **Could not read:** `backend/src/main/resources/application.properties`. It is
+  in git, but the permission settings block reading it, and I did not try to
+  get around that. Findings that depend on it (#1, #4) are marked UNVERIFIED.
+
+  **Process note:** besides the allowed `mvn dependency:tree`, I ran `git
+  ls-files` / `git log` to confirm the file exists in git. Both were read-only,
+  but they were outside my one-command rule.
+
+  ---
+
+  ## Critical
+
+  **1. [A02 Cryptographic Failures / A07] Hardcoded JWT signing secret
+  (UNVERIFIED)**
+  - **Where:** `application.properties` (`app.jwt.secret`), used at
+  `JwtUtil.java:18-20`
+  - **Basis:** README "Deliberate issues" #3 says a hardcoded demo secret is
+  committed.
+  - **Impact:** anyone who can read the repo can sign a token with `sub=<any
+  userId>` and act as any user, with no password needed.
+  - **Fix:**
+    - Remove the value and use `app.jwt.secret=${APP_JWT_SECRET}` with no
+  default.
+    - Add a startup check that fails if the secret is missing or under 32 bytes.
+    - Rotate the secret, since it is in git history.
+    - Use `secret.getBytes(StandardCharsets.UTF_8)` at `JwtUtil.java:20`. It
+  currently uses the platform charset.
+
+  ## High
+
+  **2. [A07 Identification and Authentication Failures] User enumeration on
+  register**
+  - **Where:** `AuthService.java:22-23` `register()`, returned by
+  `GlobalExceptionHandler.java:16`
+  - **Impact:** `POST /api/auth/register` answers `400 {"error":"Email already
+  registered: victim@x.com"}`, so an attacker can confirm which emails have
+  accounts and build a credential-stuffing list.
+  - **Fix:** throw a generic `throw new IllegalArgumentException("Registration
+  could not be completed");` with no email in the message. Ideally, change to an
+  email-verification flow so register always responds the same way ("check your
+  inbox").
+
+  **3. [A07] Login timing reveals which emails exist**
+  - **Where:** `AuthService.java:31-35` `login()`
+  - **Impact:** for an unknown email the code throws before running bcrypt, so
+  it answers in about 1 ms instead of about 80-100 ms. "Invalid credentials"
+  therefore still reveals which emails are registered.
+  - **Fix:** always run one bcrypt comparison:
+    ```java
+    private final String dummyHash; // in constructor: this.dummyHash =
+  passwordEncoder.encode("dummy-password-for-timing");
+    public String login(String email, String password) {
+        Optional<User> user = userRepository.findByEmail(email);
+        boolean ok = passwordEncoder.matches(password,
+  user.map(User::getPasswordHash).orElse(dummyHash));
+        if (user.isEmpty() || !ok) throw new InvalidCredentialsException(); //
+  map to 401
+        return jwtUtil.generateToken(user.get().getId(), user.get().getEmail());
+    }
+    ```
+
+  **4. [A05 Security Misconfiguration] H2 console open to everyone, with frame
+  protection off (UNVERIFIED)**
+  - **Where:** `SecurityConfig.java:44` (`/h2-console/**` permitAll) and
+  `SecurityConfig.java:47` (`frameOptions().disable()`)
+  - **Caveat:** this only applies if `spring.h2.console.enabled=true`, which I
+  couldn't check.
+  - **Impact:** an unauthenticated attacker can open the console and dump
+  `app_user.password_hash` for offline cracking. With frame protection off, the
+  whole app can also be framed (clickjacking).
+  - **Fix:**
+    - Only expose `/h2-console/**` in a `dev` profile, and never permitAll in
+  other profiles.
+    - Use `frameOptions(f -> f.sameOrigin())`, and only for the console path.
+    - Set `spring.h2.console.enabled=false` by default.
+
+  **5. [A07] Rate limiting is per IP only, can lock everyone out, and its memory
+  grows without limit**
+  - **Where:** `AuthRateLimitFilter.java:54` (`getRemoteAddr()` key) and `:28`
+  (map never cleaned up)
+  - **Impact:**
+    - An attacker spreading requests across many IPs can password-spray any
+  account with no per-account lockout.
+    - Behind a reverse proxy, every user shares one IP. One attacker sending 5
+  requests a minute then blocks login for everyone.
+    - Rotating IPv6 addresses adds `ConcurrentHashMap` entries forever until the
+  JVM runs out of memory.
+    - Login and register share one 5/min bucket.
+  - **Fix:**
+    - Add a second limiter keyed on the normalised email for `/login`.
+    - Use a Caffeine cache with expire-after-access (for example `Caffeine.newBu
+  ilder().expireAfterAccess(period.multipliedBy(2)).maximumSize(100_000)`)
+  instead of the unbounded map. Caffeine is a new dependency, so confirm before
+  adding it.
+    - Resolve the client IP via `server.forward-headers-strategy=framework`, and
+  only behind a trusted proxy.
+    - Use separate buckets for `/login` and `/register`.
+
+  ## Medium
+
+  **6. [A07] The token validity check is a stub that always returns true; expiry
+  is only enforced by accident**
+  - **Where:** `JwtUtil.java:55-57` `isTokenValid()` and
+  `JwtAuthFilter.java:33-34`
+  - **Correction to the README:** expired tokens are not actually accepted. jjwt
+  0.12.5 `parseSignedClaims` (called from `extractUserId`) throws
+  `ExpiredJwtException` / `SignatureException`.
+  - **The real problems:**
+    - The check does nothing.
+    - The filter has no try/catch, so a bad token causes an unhandled exception
+  and an empty 403.
+    - A stale token in the header breaks the permitAll `/api/auth/login` and
+  `/register` endpoints, because the filter runs on every path.
+    - Any refactor that drops `extractUserId` (for example caching claims)
+  silently turns this into full acceptance of expired tokens.
+  - **Impact:** expiry protection rests on a side effect and could disappear
+  without anyone noticing; today it already causes a login denial-of-service for
+  clients holding expired tokens.
+  - **Fix:**
+    ```java
+    public boolean isTokenValid(String token) {
+        try { Jwts.parser().verifyWith(key).build().parseSignedClaims(token);
+  return true; }
+        catch (JwtException | IllegalArgumentException e) { return false; }
+    }
+    ```
+    In the filter, catch `JwtException` and continue without authentication.
+  Better still, parse once, return `Optional<Long>`, and skip the filter for
+  `/api/auth/**` via `shouldNotFilter`.
+
+  **7. [A07 / A04 Insecure Design] No input validation and no password policy**
+  - **Where:** `AuthController.java:21,27` (no `@Valid`) and `:32,35`;
+  `AuthService.java:25`
+  - **Impact:**
+    - Users can register with a one-character password (`@NotBlank` is ignored),
+  or a null or invalid email.
+    - A null email passes `existsByEmail` and then hits the `nullable=false`
+  constraint, giving a 500.
+    - A null password makes BCrypt throw `IllegalArgumentException("rawPassword
+  cannot be null")`, which is sent back to the client.
+  - **Fix:**
+    - Add `@Valid` to both `@RequestBody` parameters.
+    - Add `@NotBlank @Email @Size(max=254)` on email and `@Size(min=12, max=72)`
+  on password.
+    - Add a `MethodArgumentNotValidException` handler that returns 400;
+  otherwise the catch-all turns it into a 500.
+    - Optionally, check new passwords against a breached-password list.
+
+  **8. [A06 Vulnerable and Outdated Components] Old Spring stack**
+  - **Where:** `backend/pom.xml`. The dependency tree shows Spring Boot 3.2.5,
+  spring-security 6.2.4, spring-framework 6.1.6, tomcat-embed-core 10.1.20 and
+  logback 1.4.14.
+  - **Impact:** Spring Boot 3.2.x is out of OSS support. Known CVEs include
+  CVE-2025-22228 (BCryptPasswordEncoder accepts passwords over 72 bytes when the
+  first 72 match, affects 6.2.0-6.2.9), CVE-2024-38809 (Spring ETag DoS) and
+  CVE-2024-34750 (Tomcat HTTP/2 DoS).
+  - **Fix:** upgrade the parent to the latest supported Spring Boot 3.x patch
+  release. Combined with the 72-byte password cap from #7, this removes the
+  bcrypt truncation issue.
+
+  **9. [A04 Insecure Design] Wrong status code and exception type for failed
+  login**
+  - **Where:** `AuthService.java:32,35`
+  - **Impact:** bad credentials return 400 via `IllegalArgumentException`, the
+  same type that wraps unrelated validation errors. The client and any
+  monitoring can't tell a brute-force attempt from bad input.
+  - **Fix:** add a dedicated `InvalidCredentialsException` mapped to `401` in
+  `GlobalExceptionHandler`, and log failed logins (without the password) so
+  brute force can be detected (A09).
+
+  ## Low
+
+  **10. [A07] Emails are case-sensitive**
+  - **Where:** `AuthService.java:22,31`
+  - **Impact:** `Alice@x.com` and `alice@x.com` can be registered as separate
+  accounts, which enables look-alike accounts and gets around the per-email
+  limiter suggested in #5.
+  - **Fix:** normalise with `email.trim().toLowerCase(Locale.ROOT)` before every
+  lookup and save. Consider a unique index on `lower(email)`.
+
+  **11. [A04] Race condition between the existence check and the save**
+  - **Where:** `AuthService.java:22-26`
+  - **Impact:** two register requests for the same email at once both pass
+  `existsByEmail`. The second hits the unique constraint and gets a 500.
+  - **Fix:** catch `DataIntegrityViolationException` around `save` and return
+  the same generic message as #2.
+
+  **12. [A02] Email is readable inside the token**
+  - **Where:** `JwtUtil.java:30`
+  - **Impact:** the email sits in base64 in every token, so it leaks wherever
+  tokens end up (logs, browser storage, referrers).
+  - **Fix:** keep only `sub` (the user id). Also add `iss`/`aud` claims and
+  check them in the parser (`requireIssuer`, `requireAudience`).
+
+  **13. [A01 Broken Access Control] Tokens stay valid for deleted or disabled
+  users and can't be revoked**
+  - **Where:** `JwtAuthFilter.java:34-36`
+  - **Impact:** a token keeps working for up to 60 minutes after the account is
+  deleted, the password is changed, or the user logs out.
+  - **Fix:** add a `tokenVersion` (or `passwordChangedAt`) column to `User`, put
+  it in the token, and compare it in the filter. Alternatively, use short
+  access tokens with refresh-token rotation.
+
+  ---
+
+  ## Totals
+  - **Critical:** 1 (unverified)
+  - **High:** 4 (one unverified)
+  - **Medium:** 4
+  - **Low:** 4
+  - **Total:** 13
+
+  The README also lists an IDOR in `TaskService.markCompleted()` / `delete()`.
+  It is outside this file's scope and I did not audit it here.
+
+  ## Recommended immediate action
+  Move `app.jwt.secret` out of `application.properties` into an environment
+  variable, rotate it, and add a startup check for a 32-byte minimum. While the
+  secret is in the repo, anyone who can read it can forge a token for any user
+  and skip authentication entirely, so none of the other fixes matter until this
+  is done. The README marks it, along with #6, as a deliberate training bug not
+  to fix before the session, so check with the trainer first.
+
+  ## Memory updates
+  I created the index (`MEMORY.md`) and four notes in `D:\Github -
+  Manish\ms-oct-claude-training\demo-project\demo-project-java\.claude\agent-mem
+  ory\security-analyst\`: `application-properties-access-denied.md`,
+  `jwt-expiry-enforced-by-jjwt-parse.md`, `deliberate-training-bugs.md` and
+  `shell-command-restriction.md`.
+
+● Security audit of AuthService.java
+
+  The security-analyst found 13 issues: 1 Critical, 4 High, 4 Medium, 4 Low. No
+  source files were modified. Two findings (#1, #4) are unverified because the
+  agent could not read application.properties.
+
+  Critical
+
+  1. Hardcoded JWT signing secret (unverified). app.jwt.secret in
+     application.properties, used at JwtUtil.java:18-20. Anyone with repo access
+     can forge a token for any user. Fix: load it from an environment variable,
+     fail startup if it is under 32 bytes, rotate it, and use UTF-8 explicitly.
+
+  High
+
+  2. User enumeration on register. AuthService.java:22-23 returns "Email already
+     registered: <email>". Use a generic message.
+  3. Login timing leak. AuthService.java:31-35 skips bcrypt for unknown emails.
+     Always compare against a dummy hash.
+  4. H2 console open and frame protection off (unverified).
+     SecurityConfig.java:44,47. Restrict to a dev profile and use sameOrigin.
+  5. Weak rate limiting. AuthRateLimitFilter.java:28,54 is per IP only, uses an
+     unbounded map, and shares one bucket for login and register. Add a
+     per-email limiter and an expiring cache. Caffeine would be a new
+     dependency, so it needs your confirmation first.
+
+  Medium
+
+  6. isTokenValid() is a stub that always returns true. JwtUtil.java:55-57.
+     Expired tokens are still rejected today, but only as a side effect of
+     extractUserId. The filter also has no try/catch, so a stale token breaks
+     login and register.
+  7. No input validation or password policy. AuthController.java:21,27 has no
+     @Valid. A null or one-character password gets through.
+  8. Outdated stack. Spring Boot 3.2.5 is out of OSS support and has known CVEs,
+     including a BCrypt 72-byte issue.
+  9. Wrong status for failed login. AuthService.java:32,35 returns 400. It
+     should be 401 with a dedicated exception and logging.
+
+  Low
+
+  10. Emails are case-sensitive, so duplicate accounts are possible.
+  11. Race between existsByEmail and save can produce a 500.
+  12. The email is exposed in the JWT claims. Keep only sub, and add iss/aud.
+  13. Tokens can't be revoked and stay valid for deleted users for up to 60
+      minutes.
+
+  Things to know
+
+  - Deliberate training bugs: the agent says the README marks the JWT secret and
+    isTokenValid() as intentional issues. Check with the trainer before fixing
+    them.
+  - Scope: the README also lists an IDOR in TaskService that was not audited
+    here.
+  - Agent side effects:
+    - It wrote four memory notes under .claude/agent-memory/security-analyst/,
+      which will show up as untracked files in git.
+    - It ran git ls-files and git log in addition to mvn dependency:tree. All
+      were read-only.
+
+  Suggested next step: fix #1 first, since it makes the others moot. Tell me
+  which findings you'd like fixed and I'll make the changes with tests, per
+  CLAUDE.md. I won't touch application.properties secrets without flagging it.
+
+✻ Cogitated for 7s · done 11:18 AM
+
+● Agent "Security audit of AuthService" finished · 2m 57s
+
+❯ ask the security-analyst to audit "d:\Github -                                
+  Manish\ms-oct-claude-training\demo-project\demo-project-java\backend\src\main 
+  \java\com\technizer\taskapi\auth\AuthService.java"                            
+
+● security-analyst(Security audit of AuthService)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● I've started a second security-analyst audit of AuthService.java, since you
+  asked again. It's running in the background and I'll report its findings when
+  it finishes. The first audit's results are above if you want them in the
+  meantime.
+
+✻ Brewed for 8s · done 11:19 AM
+
+› Message from security-analyst
+  # Security audit of AuthService.java
+
+  **Main issue:** the login endpoint tells an attacker whether an account exists
+  in two separate ways (a revealing error message and response timing). Signup
+  leaks it a third way. The only Critical item is the hardcoded JWT secret, and
+  I could not confirm it because I'm not allowed to open the config file that
+  holds it.
+
+  **Scope:** `D:\Github - Manish\ms-oct-claude-training\demo-project\demo-projec
+  t-java\backend\src\main\java\com\technizer\taskapi\auth\AuthService.java`. For
+  context I also read `JwtUtil`, `JwtAuthFilter`, `AuthController`,
+  `AuthRateLimitFilter`, `SecurityConfig`, `User`, `UserRepository`,
+  `GlobalExceptionHandler` and `pom.xml`. I modified no source files. I did not
+  run `mvn dependency:tree`; the versions come from the `pom.xml` parent (Spring
+  Boot 3.2.5 brings in Spring Security 6.2.4).
+
+  **Not verified:** `backend/src/main/resources/application.properties` is
+  blocked by the permission deny list ("File is in a directory that is denied by
+  your permission settings"). Finding #1 relies on the README, not on reading
+  the file.
+
+  ---
+
+  ## Critical
+
+  **1. A02 Cryptographic Failures / A05 Misconfiguration: hardcoded JWT signing
+  secret (unverified)**
+  - **Where:** `JwtUtil.java:18-20` reads `${app.jwt.secret}` from
+  `application.properties`.
+  - **Impact:** anyone who can read the repo can sign a token with any `sub` and
+  log in as any user, including users who don't exist yet.
+  - **Fix:** remove the value from the properties file and supply it from an
+  environment variable or vault (`app.jwt.secret=${JWT_SECRET}` with no
+  default). It should be 32 or more random bytes, Base64-decoded with
+  `Decoders.BASE64.decode(...)` and not `secret.getBytes()`, which uses the
+  platform charset. Rotate the secret.
+  - **Note:** this is README deliberate bug #3. Report it, but don't fix it
+  before the training session.
+
+  ## Medium
+
+  **2. A07 Identification and Authentication Failures: login reveals which
+  accounts exist (error-message oracle)**
+  - **Where:** `AuthService.login` at `AuthService.java:34`, plus
+  `GlobalExceptionHandler.java:16`.
+  - **Impact:** a single `POST /api/auth/login {"email":"victim@x.com"}` with no
+  password field gives a reliable answer:
+    - existing account: `BCryptPasswordEncoder.matches(null, hash)` throws
+  `IllegalArgumentException("rawPassword cannot be null")`, and the handler
+  returns that text, so the response is 400 `{"error":"rawPassword cannot be
+  null"}`.
+    - unknown account: 400 `{"error":"Invalid credentials"}`.
+  - **Fix:**
+    - Reject a null or blank password before any lookup (`if (password == null
+  || password.isBlank()) throw new BadCredentialsException("Invalid
+  credentials")`).
+    - Add `@Valid` to `AuthController.java:21,27` and add a
+  `MethodArgumentNotValidException` handler.
+    - Stop returning `ex.getMessage()` from the `IllegalArgumentException`
+  handler. Throw a dedicated `InvalidCredentialsException` and map it to a fixed
+  message.
+
+  **3. A07: signup reveals which emails are registered**
+  - **Where:** `AuthService.register` at `AuthService.java:22-23`.
+  - **Impact:** `"Email already registered: <email>"` lets anyone check whether
+  an email has an account, and it reflects the attacker's input back.
+  - **Fix:**
+    - Short term: use a generic message without the email in it (`"Registration
+  could not be completed"`).
+    - Proper fix: always return the same 202 response and tell the address owner
+  by email that an account already exists.
+
+  **4. A07: login timing reveals which accounts exist**
+  - **Where:** `AuthService.login` at `AuthService.java:31-32`.
+  - **Impact:** for an unknown email the method fails before running BCrypt,
+  which takes about 50-100 ms. Unknown emails therefore get noticeably faster
+  responses.
+  - **Fix:** run BCrypt on both paths. Compute `dummyHash =
+  passwordEncoder.encode(UUID.randomUUID().toString())` in the constructor,
+  then:
+    ```java
+    Optional<User> u = userRepository.findByEmail(normalized);
+    boolean ok = passwordEncoder.matches(password,
+  u.map(User::getPasswordHash).orElse(dummyHash));
+    if (u.isEmpty() || !ok) throw new InvalidCredentialsException();
+    ```
+
+  **5. A07: no password policy; empty passwords accepted**
+  - **Where:** `AuthService.register` at `AuthService.java:21,25`, and
+  `AuthController.java:21`, which has no `@Valid`.
+  - **Impact:** users can register with `""` or `"a"`. The DTO's
+  `@NotBlank`/`@Email` annotations never run, so weak passwords make credential
+  stuffing and guessing easy.
+  - **Fix:**
+    - Add `@Valid` to the controller parameters.
+    - Add `@Size(min = 12, max = 72)` to `password`.
+    - Check passwords against a breached or common-password list in the service
+  layer, so the rule still applies if the service is called from somewhere other
+  than the controller.
+
+  **6. A07: weak brute-force protection**
+  - **Where:** `AuthRateLimitFilter.java:54`.
+  - **Impact:**
+    - Limits are per IP only, so an attacker rotating IPs gets unlimited guesses
+  against one account, and there is no per-account lockout.
+    - Behind a reverse proxy every user shares one IP bucket, so 5 requests a
+  minute blocks login for everyone.
+    - The `buckets` map is never cleaned up, so memory grows with every new IP.
+  - **Fix:**
+    - Add a second limiter keyed on the normalised email for `/login`, with
+  backoff or temporary lockout.
+    - Resolve the client IP through `ForwardedHeaderFilter` with trusted proxies
+  only.
+    - Store buckets in a Caffeine cache with `expireAfterAccess`.
+
+  **7. A07: `isTokenValid` is a stub that always returns true**
+  - **Where:** `JwtUtil.isTokenValid` at `JwtUtil.java:55-57`, used at
+  `JwtAuthFilter.java:33-34`.
+  - **Impact:** limited. Expired or forged tokens are not actually accepted,
+  because jjwt 0.12.5's `parseSignedClaims` in `extractUserId` throws. But
+  expiry is only enforced as a side effect of parsing, and the uncaught
+  exception turns into an empty 403. That includes a stale token sent to the
+  public `/api/auth/**` endpoints, which breaks login and signup for that
+  client.
+  - **Fix:**
+    ```java
+    try { Jwts.parser().verifyWith(key).build().parseSignedClaims(token); return
+  true; } catch (JwtException | IllegalArgumentException e) { return false; }
+    ```
+    Also wrap the filter body in try/catch and clear the security context on
+  failure.
+  - **Note:** this is README deliberate bug #1. It is rated Medium, not
+  Critical, because jjwt still rejects expired tokens.
+
+  ## Low
+
+  **8. A07: emails are not normalised**
+  - **Where:** `AuthService.java:22,31`.
+  - **Impact:** `Alice@x.com`, `alice@x.com` and `alice@x.com ` (trailing space)
+  are separate accounts. H2 and most databases compare strings
+  case-sensitively, which allows lookalike accounts and confusing duplicates.
+  - **Fix:** apply `email.trim().toLowerCase(Locale.ROOT)` in both methods
+  before any repository call, and store emails that way.
+
+  **9. A04 Insecure Design: race between the duplicate check and the save**
+  - **Where:** `AuthService.java:22-26`.
+  - **Impact:** two signups with the same email at the same time both pass
+  `existsByEmail`. The second hits the unique constraint, and the resulting
+  `DataIntegrityViolationException` becomes a 500.
+  - **Fix:** catch `DataIntegrityViolationException` around `save` and map it to
+  the same generic response as #3.
+
+  **10. A07: no email verification before a token is issued**
+  - **Where:** `AuthService.java:27`.
+  - **Impact:** an attacker can register a victim's email address, get a working
+  session straight away, and block the real owner from signing up.
+  - **Fix:** create the account as unverified, send a one-time verification
+  link, and only issue tokens after the email is verified.
+
+  **11. A02 / A04: JWT design weaknesses**
+  - **Where:** `JwtUtil.java:28-34`.
+  - **Impact:**
+    - The email is in the JWT payload, which is only Base64-encoded, so it shows
+  up in logs and browser storage.
+    - There is no `iss`/`aud` claim and no `jti`, so stolen tokens can't be
+  revoked or scoped.
+  - **Fix:**
+    - Remove the `email` claim, since the subject ID is enough.
+    - Add `issuer`/`audience` and check them with
+  `requireIssuer`/`requireAudience`.
+    - Consider short-lived access tokens with refresh tokens, plus a revocation
+  list.
+
+  **12. A09 Security Logging and Monitoring Failures: failed logins are not
+  logged**
+  - **Where:** `AuthService.login` and `AuthService.register`.
+  - **Impact:** credential-stuffing and enumeration attempts leave no audit
+  trail.
+  - **Fix:** log failed and successful logins with the IP and a hashed email,
+  never the password, and alert on spikes.
+
+  **13. A06 Vulnerable and Outdated Components: Spring Security 6.2.4**
+  - **Where:** `pom.xml:10` (Spring Boot parent 3.2.5).
+  - **Impact:** this version is affected by CVE-2025-22228.
+  `BCryptPasswordEncoder.matches` returns true for passwords over 72 bytes as
+  long as the first 72 bytes match. The 6.2.x line is also out of OSS support.
+  - **Fix:** upgrade to a supported Spring Boot 3.4.x or 3.5.x line (Spring
+  Security 6.4.4 or later), and cap password length at 72 bytes (see #5).
+
+  **Related, outside AuthService:** `SecurityConfig.java:44,47` makes
+  `/h2-console/**` public and disables frame options (A05). Combined with #1,
+  anyone who can reach the console can read the stored password hashes.
+
+  ---
+
+  ## Totals
+
+  | Severity | Count | Notes |
+  |---|---|---|
+  | Critical | 1 | Unverified, deliberate training bug |
+  | High | 0 | |
+  | Medium | 6 | |
+  | Low | 6 | |
+  | **Total** | **13** | |
+
+  ## Recommended immediate action
+
+  Close the login enumeration problems first (#2 and #4, both in
+  `AuthService.login`):
+  - reject a null or blank password up front;
+  - always run BCrypt against a dummy hash for unknown users;
+  - stop `GlobalExceptionHandler` from echoing exception messages.
+
+  #1 (the hardcoded secret) is more serious, but the README says to leave it in
+  place until the training session. For any real deployment, move it out of the
+  properties file and rotate it first.
+
+  ## Memory
+
+  I updated `D:\Github - Manish\ms-oct-claude-training\demo-project\demo-project
+  -java\.claude\agent-memory\security-analyst\deliberate-training-bugs.md` with
+  the new findings (null-password message oracle, no password policy, no email
+  normalisation, CVE-2025-22228). Nothing else changed: `application.properties`
+  is still blocked, as the existing note says.
+
+● Second security audit of AuthService.java
+
+  The second run found 13 issues: 1 Critical, 6 Medium, 6 Low, and no High. No
+  source files were modified. Finding #1 is unverified because the agent
+  couldn't read application.properties.
+
+  What differs from the first audit
+
+  - New, probably the most useful finding: a login request with no password
+    field makes BCrypt throw "rawPassword cannot be null" for existing accounts,
+    while unknown accounts get "Invalid credentials". That is a reliable
+    account-existence oracle (#2). This audit didn't repeat the first run's "H2
+    console" and "no per-account lockout" ratings as High; it listed the H2
+    console as a related issue outside AuthService.
+  - Also new:
+    - No email verification before a token is issued (#10).
+    - Failed logins aren't logged (#12).
+    - Specific CVE-2025-22228 tied to the BCrypt 72-byte behaviour (#13).
+  - Severity differences: the two audits rate some items differently (for
+    example user enumeration is High in the first and Medium here). Treat the
+    severity labels as approximate.
+
+  Findings
+
+  #: 1
+  Severity: Critical (unverified)
+  Issue: Hardcoded JWT secret
+  Location: JwtUtil.java:18-20
+  ────────────────────────────────────────
+  #: 2
+  Severity: Medium
+  Issue: Login null-password error reveals which accounts exist
+  Location: AuthService.java:34, GlobalExceptionHandler.java:16
+  ────────────────────────────────────────
+  #: 3
+  Severity: Medium
+  Issue: Register reveals registered emails
+  Location: AuthService.java:22-23
+  ────────────────────────────────────────
+  #: 4
+  Severity: Medium
+  Issue: Login timing reveals which accounts exist
+  Location: AuthService.java:31-32
+  ────────────────────────────────────────
+  #: 5
+  Severity: Medium
+  Issue: No password policy, empty passwords accepted (no @Valid)
+  Location: AuthController.java:21,27
+  ────────────────────────────────────────
+  #: 6
+  Severity: Medium
+  Issue: Weak brute-force protection (per-IP only, unbounded map)
+  Location: AuthRateLimitFilter.java:54
+  ────────────────────────────────────────
+  #: 7
+  Severity: Medium
+  Issue: isTokenValid() is a stub returning true
+  Location: JwtUtil.java:55-57
+  ────────────────────────────────────────
+  #: 8
+  Severity: Low
+  Issue: Emails not normalised
+  Location: AuthService.java:22,31
+  ────────────────────────────────────────
+  #: 9
+  Severity: Low
+  Issue: Register race gives a 500
+  Location: AuthService.java:22-26
+  ────────────────────────────────────────
+  #: 10
+  Severity: Low
+  Issue: No email verification
+  Location: AuthService.java:27
+  ────────────────────────────────────────
+  #: 11
+  Severity: Low
+  Issue: JWT carries email, no iss/aud/jti
+  Location: JwtUtil.java:28-34
+  ────────────────────────────────────────
+  #: 12
+  Severity: Low
+  Issue: Failed logins not logged
+  Location: AuthService.java
+  ────────────────────────────────────────
+  #: 13
+  Severity: Low
+  Issue: Outdated Spring Security 6.2.4
+  Location: pom.xml:10
+
+  Suggested first fixes
+
+  1. Reject null or blank passwords up front in login.
+  2. Always run BCrypt, using a dummy hash for unknown users.
+  3. Stop GlobalExceptionHandler from echoing exception messages.
+  4. Add @Valid and a password length policy of 12 to 72.
+
+  Things to know
+
+  - Training bugs: the agent says the README marks #1 and #7 as deliberate bugs
+    to leave until the session, so check with the trainer before touching them.
+  - Side effect: the agent updated one memory note,
+    .claude/agent-memory/security-analyst/deliberate-training-bugs.md, which is
+    an untracked change in git.
+  - Dependencies: the Caffeine suggestion in #6 would be a new dependency, so
+    I'd confirm with you before adding it.
+
+  Tell me which findings you want fixed and I'll make the changes with tests,
+  per CLAUDE.md.
+
+✻ Crunched for 9s · done 11:22 AM
+
+● Agent "Security audit of AuthService" finished · 2m 11s
+
+※ recap: You asked for a security audit of AuthService.java, and both runs of the security-analyst are done, each reporting 13 findings with one unverified Critical (hardcoded JWT secret). Next, tell me which findings to fix and I'll implement them with tests. (disable recaps in /config)
+
+❯ Use Opus and run an agent to analyse and help me decide on documentation of   
+  the projects                                                                  
+
+● Agent(Analyse project documentation needs) Opus 5.5
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+● I've started an Opus agent to analyse the project's documentation. It's
+  read-only and will recommend what to document and in what form, with options
+  and trade-offs. I'll relay its recommendation when it finishes.
+
+✻ Cooked for 12s · done 11:43 AM
+
+› Message from general-purpose
+  I found eight places where the docs no longer match the code. Running the Java
+  edition needs only the README; the API reference, architecture and auth docs
+  are missing or out of date. Nothing was modified. I didn't read
+  `application.properties`.
+
+  **Inventory (paths relative to `D:\Github -
+  Manish\ms-oct-claude-training\demo-project\`)**
+
+  | Doc | Quality and accuracy |
+  |---|---|
+  | `README.md` (parent) | Good guide to choosing an edition. Now wrong: it says
+  both editions have the same frontend and API. |
+  | `demo-project-java\README.md` | Clear setup steps. Stale in five places (see
+  below). |
+  | `demo-project-java\CLAUDE.md` | Short rules (stack, standards, git). Lists
+  only 3 of 5 backend packages (`config/`, `exception/` missing) and leaves out
+  the frontend `core/` folder. |
+  | `backend\CLAUDE.md`, `frontend\CLAUDE.md` | Best docs in the repo. Accurate
+  "non-obvious behaviour" notes (403 not 401, `@Valid` missing, `localStorage`
+  auth). |
+  | `frontend\README.md` | Angular CLI boilerplate with nothing
+  project-specific. |
+  | `.claude\` (4 agents, 6 commands, 3 skills, `agent-memory\`) | Workflow docs
+  aimed at Claude. `skills\deploy\SKILL.md` deploys to a "staging" environment
+  that doesn't exist. |
+  | `plans\auth-rate-limiting*.md` | Design records, a bit like ADRs. Backend
+  plan still says "In progress" though the code is done. Frontend plan says no
+  `*.spec.ts` exists, but three do now. |
+  | Javadoc, OpenAPI, ADR folder | Only 3 Javadoc blocks. No springdoc/Swagger
+  in `pom.xml`. No ADR folder. |
+
+  **Where the docs and code disagree**
+  1. The README's API list is missing `GET /api/tasks/{id}`, `PUT
+  /api/tasks/{id}` and the auth rate limit (429 with `Retry-After`, 5 requests
+  per minute per IP).
+  2. The README says the repo has no `CLAUDE.md` or `.claude\`, and not to
+  pre-create them. Both now exist.
+  3. `backend\CLAUDE.md` and `frontend\CLAUDE.md` point to `..\CLAUDE.md` for
+  commands, the auth flow, routing/CORS and the training bugs. That file
+  contains none of these.
+  4. Planted bug 1 (README and the Javadoc in `JwtUtil.java`) says expired
+  tokens are accepted. They aren't: jjwt's parsing rejects them and the request
+  ends as an empty 403. The repo's own note
+  `.claude\agent-memory\security-analyst\jwt-expiry-enforced-by-jjwt-parse.md`
+  already says this.
+  5. Bug 4 says tests are placeholders only. There are now real tests: 6
+  rate-limit, 5 get and 6 update tests, 2 controller tests, plus 3 frontend
+  specs.
+  6. The .NET edition (`demo-project-dotnet`) is still the original baseline: 4
+  endpoints, no `CLAUDE.md`, no `.claude\`, no rate limiter, no task-detail
+  view. It has a good Java-to-.NET mapping table in `backend\README.md`. The
+  parent README's claim that the two editions match is now false.
+
+  **Audiences**
+  - **Trainees** need a quickstart, which folder to open, and the API. They must
+  not be given the list of planted bugs.
+  - **Trainers** need the planted-bug map, the setup checklist and the module
+  mapping.
+  - **New developers** need architecture, the auth flow and testing commands.
+  - **API consumers** need endpoints, error shapes, 403/429 behaviour and CORS.
+  - **Reviewers and Claude** need the `CLAUDE.md` files and `.claude\` agents.
+
+  **Recommended docs, in priority order**
+  1. **Fix the README** (S, by hand): API table, rate limit, remove the "no
+  CLAUDE.md" claim, correct bugs 1 and 4.
+  2. **Fix the root `CLAUDE.md`** (S, stays in `CLAUDE.md`): add build/test
+  commands, the auth flow, the full package list and a pointer to the bugs, so
+  the sub-file references work.
+  3. **Move the training material into a trainer-only `TRAINER.md`** (S, by
+  hand): planted bugs, the module map, the checklist. Better still, keep it
+  outside the trainee repo.
+  4. **API reference** (M): either a hand-written `docs/api.md` or a generated
+  OpenAPI spec via springdoc. springdoc is a new dependency, so it needs your
+  confirmation under the `CLAUDE.md` rules.
+  5. **Architecture and auth/security overview** (M, by hand, one page with a
+  request-flow diagram).
+  6. **Testing guide** (S): mostly already in the sub-`CLAUDE.md` files; link to
+  them from the README.
+  7. **Turn `plans\` into ADRs** (S): add Accepted/Done status.
+  8. **Replace `frontend\README.md`** (S).
+  - Contribution and git standards can stay in `CLAUDE.md`, or be copied into a
+  short `CONTRIBUTING.md` if people outside Claude need them.
+
+  **Risks**
+  - **Answers given away:** the README's "Deliberate issues" section, the code
+  comments in `JwtUtil` and `TaskService`, and
+  `.claude\agent-memory\security-analyst\deliberate-training-bugs.md` all spell
+  out the vulnerabilities. That memory file also lists extra findings: an
+  enumeration oracle, a timing oracle, CVE-2025-22228. Don't publish any of
+  these as-is.
+  - **Secrets:** a hardcoded JWT secret is committed in
+  `application.properties`. Docs should mention it without quoting it.
+  - **Going stale:** a hand-written API table (it already has), the plan
+  statuses, and the claim that the two editions match.
+  - **Repo scope:** the git root is the whole `ms-oct-claude-training` folder,
+  so anything committed reaches every reader of the repo.
+
+  **Decision options**
+  - **A. Minimal fix (S, about 1 hour):** items 1–3 only. Cheapest and gives
+  trainees an accurate repo, but the API table will drift again.
+  - **B. Recommended (M):** A, plus a hand-written `docs/architecture.md` and
+  `docs/api.md`, plus ADRs. No new dependencies, and it suits a training repo.
+  The API doc needs a review whenever an endpoint changes; the team-code-review
+  skill could check for that.
+  - **C. Generated (M–L):** A, plus springdoc-openapi with Swagger UI and
+  Javadoc on the controllers. The API docs can't drift, but it needs the
+  dependency approved. It also changes what trainees see in the code, and the
+  same work would be needed in the .NET edition (Swashbuckle) to keep the two in
+  step.
+
+  Whichever option you choose, decide whether the .NET edition is meant to stay
+  the untouched baseline. If it is, say so in the parent README.
+
+● Documentation analysis for the project
+
+  The Opus agent found that the Java edition's docs have drifted from the code
+  in eight places. It made no changes and did not read application.properties.
+
+  Current state
+
+  - Good: backend\CLAUDE.md and frontend\CLAUDE.md are the best docs in the
+    repo, and the Java README.md has clear setup steps.
+  - Stale or wrong:
+    - The README's API list is missing GET /api/tasks/{id}, PUT /api/tasks/{id}
+      and the 429 rate limit.
+    - The README says no CLAUDE.md or .claude\ exists, but both do.
+    - The sub-CLAUDE.md files point to the root CLAUDE.md for commands and auth
+      flow, which it doesn't contain.
+    - Planted bug 1 says expired tokens are accepted, but jjwt rejects them
+      (this matches the security audit).
+    - Bug 4 says tests are placeholders, but real tests exist now.
+    - plans\ statuses are outdated.
+    - skills\deploy\SKILL.md targets a "staging" environment that doesn't exist.
+  - Missing: API reference (no OpenAPI), architecture/auth overview, ADRs, and a
+    real frontend\README.md (it is Angular CLI boilerplate).
+  - .NET edition: still the original baseline, so the parent README's claim that
+    both editions match is now false.
+
+  Risks to know about
+
+  - Answers given away: the README "Deliberate issues" section, comments in
+    JwtUtil and TaskService, and
+    .claude\agent-memory\security-analyst\deliberate-training-bugs.md all reveal
+    the vulnerabilities. The memory file is also untracked output from the
+    audits above.
+  - Repo scope: the git root is the whole ms-oct-claude-training folder, so
+    anything committed reaches every reader.
+  - Secrets: docs should mention the committed JWT secret without quoting it.
+
+  Options
+
+  A. Minimal fix
+  Scope: Fix README, fill out root CLAUDE.md, move trainer material to
+  TRAINER.md
+  Effort: S, about 1 hour
+  Trade-off: Accurate repo, but the API table will drift again
+  ────────────────────────────────────────
+  B. Hand-written set (recommended)
+  Scope: A, plus docs/architecture.md, docs/api.md, and plans\ turned into ADRs
+  Effort: M
+  Trade-off: No new dependencies and suits a training repo, but the API doc
+  needs
+  review when endpoints change
+  ────────────────────────────────────────
+  C. Generated API docs
+  Scope: A, plus springdoc-openapi with Swagger UI
+  Effort: M–L
+  Trade-off: API docs can't drift, but it's a new dependency needing your
+  approval, and the .NET edition would need the same for parity
+
+  What I need from you
+
+  1. Which option (A, B or C)?
+  2. Should the trainer-only material (planted bugs, module map) go in a
+     TRAINER.md in this repo, or live outside the trainee repo?
+  3. Is the .NET edition meant to stay the untouched baseline? If so, I'd note
+     that in the parent README.
+
+  Once you decide, I'll make the edits. Any code changes will get tests, per
+  CLAUDE.md.
+
+✻ Cooked for 7s · done 11:45 AM
+
+● Agent "Analyse project documentation needs" finished · 1m 29s
+
+※ recap: You're reviewing the Java task manager's security and documentation: two AuthService audits are done, and an Opus agent has analysed the docs and recommended options A, B or C. Next, tell me which option you want, plus where trainer-only material should live. (disable recaps in /config)
+
+❯ /export "d:\Github -                                                          
+Manish\ms-oct-claude-training\demo-project\demo-project-java\plans\sessions"    
+put it in the folder                                                            
+  ⎿  Failed to export conversation: ENOENT: no such file or directory, mkdir
+     'D:\Github -
+     Manish\ms-oct-claude-training\demo-project\demo-project-java"d:\Github -
+     Manish\ms-oct-claude-training\demo-project\demo-project-java\plans'
+
+❯ /export session summary into "d:\Github -                                     
+Manish\ms-oct-claude-training\demo-project\demo-project-java\plans\sessions"    
+folder                                                                          
+  ⎿  Failed to export conversation: ENOENT: no such file or directory, mkdir
+     'D:\Github -
+     Manish\ms-oct-claude-training\demo-project\demo-project-java\session
+     summary into "d:\Github -
+     Manish\ms-oct-claude-training\demo-project\demo-project-java\plans'
