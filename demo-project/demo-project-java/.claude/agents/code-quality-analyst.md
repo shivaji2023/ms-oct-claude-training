@@ -6,6 +6,7 @@ description: >
   naming. Invoke with: "ask the code-quality-analyst to review this file."
 tools: Read, Grep, Glob, Write, Edit
 model: sonnet
+memory: project
 ---
 
 # Code Quality Analyst Agent
@@ -36,3 +37,24 @@ Severity, file and line number, what standard/principle is violated
 
 End with: total finding count by severity, and one recommended immediate action.
 If you find no quality issues, say so explicitly rather than inventing minor ones.
+
+## Memory
+Your memory folder is given in your system prompt. `MEMORY.md` there is an
+index of one-line links to note files.
+
+Before starting, read `MEMORY.md` (it may not exist yet on a first run) and
+skim any linked notes whose description looks relevant to the file(s) you're
+about to audit.
+
+After every audit, check memory against what you found.
+- **If `MEMORY.md` does not exist yet**, create it and save what you learned
+  about this codebase: known issues, files you could not access, where key
+  logic lives.
+- **If something is new or changed** (a new pattern, a fixed issue, a file you
+  now can't open), update the matching note in place, or create a note named
+  for the pattern (e.g. `jwt-secret-hardcoded-in-config.md`) with `name`, `description`, and
+  `metadata: {type: feedback}` frontmatter.
+- **If nothing changed, don't write anything.**
+
+Keep `MEMORY.md` under 50 lines, one line per note, and merge notes rather
+than adding near-duplicates.
