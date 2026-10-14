@@ -17,29 +17,29 @@ public class TaskController {
     }
 
     @GetMapping
-    public List<Task> list(@AuthenticationPrincipal Long ownerId) {
-        return taskService.listForOwner(ownerId);
+    public List<TaskResponse> list(@AuthenticationPrincipal Long ownerId) {
+        return taskService.listForOwner(ownerId).stream().map(TaskResponse::from).toList();
     }
 
     @GetMapping("/{id}")
-    public Task get(@AuthenticationPrincipal Long ownerId, @PathVariable Long id) {
-        return taskService.getForOwner(ownerId, id);
+    public TaskResponse get(@AuthenticationPrincipal Long ownerId, @PathVariable Long id) {
+        return TaskResponse.from(taskService.getForOwner(ownerId, id));
     }
 
     @PostMapping
-    public Task create(@AuthenticationPrincipal Long ownerId, @RequestBody CreateTaskRequest request) {
-        return taskService.create(ownerId, request.title(), request.description());
+    public TaskResponse create(@AuthenticationPrincipal Long ownerId, @RequestBody CreateTaskRequest request) {
+        return TaskResponse.from(taskService.create(ownerId, request.title(), request.description()));
     }
 
     @PutMapping("/{id}")
-    public Task update(@AuthenticationPrincipal Long ownerId, @PathVariable Long id,
-                       @RequestBody UpdateTaskRequest request) {
-        return taskService.update(ownerId, id, request.title(), request.description());
+    public TaskResponse update(@AuthenticationPrincipal Long ownerId, @PathVariable Long id,
+                               @RequestBody UpdateTaskRequest request) {
+        return TaskResponse.from(taskService.update(ownerId, id, request.title(), request.description()));
     }
 
     @PatchMapping("/{id}/complete")
-    public Task complete(@AuthenticationPrincipal Long ownerId, @PathVariable Long id) {
-        return taskService.markCompleted(ownerId, id);
+    public TaskResponse complete(@AuthenticationPrincipal Long ownerId, @PathVariable Long id) {
+        return TaskResponse.from(taskService.markCompleted(ownerId, id));
     }
 
     @DeleteMapping("/{id}")

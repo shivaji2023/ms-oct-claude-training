@@ -20,6 +20,10 @@ public class Task {
     @Column(nullable = false)
     private boolean completed = false;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, columnDefinition = "VARCHAR(10) DEFAULT 'MEDIUM' NOT NULL")
+    private TaskPriority priority = TaskPriority.MEDIUM;
+
     @Column(nullable = false)
     private Long ownerId;
 
@@ -65,6 +69,15 @@ public class Task {
 
     public void setCompleted(boolean completed) {
         this.completed = completed;
+    }
+
+    public TaskPriority getPriority() {
+        // Never null: rows that predate the priority column are treated as MEDIUM.
+        return priority == null ? TaskPriority.MEDIUM : priority;
+    }
+
+    public void setPriority(TaskPriority priority) {
+        this.priority = priority == null ? TaskPriority.MEDIUM : priority;
     }
 
     public Long getOwnerId() {

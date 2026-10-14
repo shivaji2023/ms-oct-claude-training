@@ -15,7 +15,7 @@ public class TaskService {
     }
 
     public List<Task> listForOwner(Long ownerId) {
-        return taskRepository.findByOwnerId(ownerId);
+        return taskRepository.findByOwnerIdOrderByIdAsc(ownerId);
     }
 
     public Task getForOwner(Long ownerId, Long taskId) {
@@ -46,16 +46,17 @@ public class TaskService {
     }
 
     public Task markCompleted(Long ownerId, Long taskId) {
-        Task task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new NoSuchElementException("Task not found: " + taskId));
+        // A task owned by someone else is reported as not found so its existence isn't leaked.
+        Task task = getForOwner(ownerId, taskId);
 
-        // NOTE: no ownership check here yet - flagged as a TODO for the
-        // security-review demo (a user can complete another user's task).
         task.setCompleted(true);
         return taskRepository.save(task);
     }
 
     public void delete(Long ownerId, Long taskId) {
-        taskRepository.deleteById(taskId);
+        // A task owned by someone else is reported as not found so its existence isn't leaked.
+        Task task = getForOwner(ownerId, taskId);
+
+        taskRepository.delete(task);
     }
 }
