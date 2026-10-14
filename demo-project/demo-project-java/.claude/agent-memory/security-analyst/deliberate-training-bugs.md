@@ -20,3 +20,9 @@ Added during the AuthService audit on 2026-10-14 (not README bugs, still present
 - There is no password policy, so `""` is accepted as a password because `@Valid` is missing.
 - Email is not normalised (case or whitespace) before `existsByEmail`/`findByEmail`.
 - Security 6.2.4 is affected by CVE-2025-22228 (the BCrypt 72-byte `matches` issue).
+
+Added during the full auth-service audit on 2026-10-14 (backend auth/user/config plus frontend auth):
+- Frontend `auth.interceptor.ts` attaches the stored token to every request, including `/api/auth/login`. An expired token in localStorage therefore makes login fail with a 403 (the filter throws), and the user cannot recover without clearing storage.
+- The JWT is kept in localStorage and carries an `email` claim. There is no route guard and no server-side revocation. JwtAuthFilter never checks that the user still exists.
+- Ruled out, so don't re-investigate: injection (Spring Data derived queries only, no XSS sinks in the frontend) and password-hash exposure (`Task` stores only `ownerId`, and auth endpoints return only the token).
+- Tomcat 10.1.20 needs an upgrade (multipart DoS CVE-2025-48988, among others).
