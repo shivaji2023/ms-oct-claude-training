@@ -1,3 +1,14 @@
+/*
+ * PreToolUse demo hook: shows the different ways a hook can respond.
+ *
+ * Pick a mode by editing DEFAULT_MODE below, or set PRETOOL_MODE in the env:
+ *   allow    - exit 0, no output: tool call proceeds normally (default)
+ *   log      - log the stdin payload, then allow
+ *   override - allow, but rewrite the tool input via updatedInput
+ *   block    - exit 2 hard block; stderr is shown to Claude as the reason
+ *   deny     - JSON permissionDecision 'deny' on stdout, exit 0
+ */
+
 const fs = require('fs');
 const path = require('path');
 
