@@ -1,6 +1,6 @@
 {
     "model": "opusplan",
     "env" : {
-        "PRETOOL_MODE": "deny"
+        "PRETOOL_MODE": "log"
     }
 }
