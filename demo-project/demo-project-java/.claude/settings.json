@@ -31,11 +31,15 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|PowerShell",
         "hooks": [
           {
             "type": "command",
-            "command": "node .claude/hooks/pretooluse-demo.js"
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.js\""
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/pretooluse-demo.js\""
           }
         ]
       }
