@@ -1,0 +1,6 @@
+{
+    "model": "opusplan",
+    "env" : {
+        "PRETOOL_MODE": "deny"
+    }
+}
