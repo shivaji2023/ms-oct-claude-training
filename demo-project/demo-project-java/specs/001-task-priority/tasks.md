@@ -66,21 +66,21 @@ description: "Task list for Task Priority"
 
 ### Tests for User Story 1
 
-- [ ] T016 [P] [US1] Extend `backend/src/test/java/com/technizer/taskapi/task/TaskServiceTest.java` with create tests: explicit priority stored, null priority stored as `MEDIUM`
-- [ ] T017 [P] [US1] Extend `backend/src/test/java/com/technizer/taskapi/task/TaskServiceUpdateTest.java` with update tests: new priority applied, null priority leaves the existing value unchanged, non-owner gets not-found
-- [ ] T018 [P] [US1] Extend `backend/src/test/java/com/technizer/taskapi/task/TaskControllerTest.java` with tests that create/update pass `priority` from the request records to the service, and that an empty-string `priority` in a request body is rejected with 400 (FR-006)
-- [ ] T019 [P] [US1] Extend `frontend/src/app/tasks/task.service.spec.ts` with tests that `create` and `update` send `priority` in the request body and that the `Task` response exposes `priority`
-- [ ] T020 [P] [US1] Extend `frontend/src/app/tasks/task-list.component.spec.ts` with tests for the priority selector on the create row (defaults to MEDIUM, selected value passed to the service) and the priority label on each task
-- [ ] T021 [P] [US1] Extend `frontend/src/app/tasks/task-detail.component.spec.ts` with tests that the detail view shows priority and that changing it calls `TaskService.update` with title, description, and the new priority
+- [X] T016 [P] [US1] Extend `backend/src/test/java/com/technizer/taskapi/task/TaskServiceTest.java` with create tests: explicit priority stored, null priority stored as `MEDIUM`
+- [X] T017 [P] [US1] Extend `backend/src/test/java/com/technizer/taskapi/task/TaskServiceUpdateTest.java` with update tests: new priority applied, null priority leaves the existing value unchanged, non-owner gets not-found
+- [X] T018 [P] [US1] Extend `backend/src/test/java/com/technizer/taskapi/task/TaskControllerTest.java` with tests that create/update pass `priority` from the request records to the service, and that an empty-string `priority` in a request body is rejected with 400 (FR-006)
+- [X] T019 [P] [US1] Extend `frontend/src/app/tasks/task.service.spec.ts` with tests that `create` and `update` send `priority` in the request body and that the `Task` response exposes `priority`
+- [X] T020 [P] [US1] Extend `frontend/src/app/tasks/task-list.component.spec.ts` with tests for the priority selector on the create row (defaults to MEDIUM, selected value passed to the service) and the priority label on each task
+- [X] T021 [P] [US1] Extend `frontend/src/app/tasks/task-detail.component.spec.ts` with tests that the detail view shows priority and that changing it calls `TaskService.update` with title, description, and the new priority
 
 ### Implementation for User Story 1
 
-- [ ] T022 [US1] Add optional `TaskPriority priority` to `CreateTaskRequest` and `UpdateTaskRequest` records in `backend/src/main/java/com/technizer/taskapi/task/TaskController.java` and pass it through to the service
-- [ ] T023 [US1] Update `TaskService.create` and `TaskService.update` in `backend/src/main/java/com/technizer/taskapi/task/TaskService.java` to take a `TaskPriority` parameter (no deprecated overloads): create stores the given priority or `MEDIUM` when null; update changes priority only when non-null
-- [ ] T024 [US1] Update the existing call sites of `create`/`update` in `backend/src/test/java/com/technizer/taskapi/task/TaskServiceTest.java`, `TaskServiceUpdateTest.java`, `TaskServiceGetTest.java`, and `TaskControllerTest.java` for the new signatures (edit calls only; no test removed)
-- [ ] T025 [P] [US1] Add `priority: 'LOW' | 'MEDIUM' | 'HIGH'` to the `Task` interface, extend `create(title, description, priority?)`, and add `update(id, title, description, priority?)` in `frontend/src/app/tasks/task.service.ts`
-- [ ] T026 [US1] Add a priority `<select>` (default MEDIUM) to the create row and show each task's priority in `frontend/src/app/tasks/task-list.component.ts`
-- [ ] T027 [US1] Show priority and add a priority `<select>` that saves via `TaskService.update` in `frontend/src/app/tasks/task-detail.component.ts`
+- [X] T022 [US1] Add optional `TaskPriority priority` to `CreateTaskRequest` and `UpdateTaskRequest` records in `backend/src/main/java/com/technizer/taskapi/task/TaskController.java` and pass it through to the service
+- [X] T023 [US1] Update `TaskService.create` and `TaskService.update` in `backend/src/main/java/com/technizer/taskapi/task/TaskService.java` to take a `TaskPriority` parameter (no deprecated overloads): create stores the given priority or `MEDIUM` when null; update changes priority only when non-null
+- [X] T024 [US1] Update the existing call sites of `create`/`update` in `backend/src/test/java/com/technizer/taskapi/task/TaskServiceTest.java`, `TaskServiceUpdateTest.java`, `TaskServiceGetTest.java`, and `TaskControllerTest.java` for the new signatures (edit calls only; no test removed)
+- [X] T025 [P] [US1] Add `priority: 'LOW' | 'MEDIUM' | 'HIGH'` to the `Task` interface, extend `create(title, description, priority?)`, and add `update(id, title, description, priority?)` in `frontend/src/app/tasks/task.service.ts`
+- [X] T026 [US1] Add a priority `<select>` (default MEDIUM) to the create row and show each task's priority in `frontend/src/app/tasks/task-list.component.ts`
+- [X] T027 [US1] Show priority and add a priority `<select>` that saves via `TaskService.update` in `frontend/src/app/tasks/task-detail.component.ts`
 
 **Checkpoint**: User Story 1 works and is testable on its own
 

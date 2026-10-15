@@ -15,6 +15,7 @@ describe('TaskDetailComponent', () => {
     completed: false,
     ownerId: 1,
     createdAt: '2026-10-13T09:30:00',
+    priority: 'MEDIUM',
   };
 
   function setup(id: string | null): void {
@@ -38,7 +39,7 @@ describe('TaskDetailComponent', () => {
   }
 
   beforeEach(() => {
-    taskService = jasmine.createSpyObj<TaskService>('TaskService', ['get']);
+    taskService = jasmine.createSpyObj<TaskService>('TaskService', ['get', 'update']);
   });
 
   it('loads the task for the id in the route and shows its details', () => {
@@ -106,5 +107,37 @@ describe('TaskDetailComponent', () => {
 
     const link = (fixture.nativeElement as HTMLElement).querySelector('a');
     expect(link?.getAttribute('href')).toBe('/tasks');
+  });
+
+  it('shows the task priority', () => {
+    taskService.get.and.returnValue(of({ ...task, priority: 'HIGH' }));
+
+    setup('5');
+
+    const select = (fixture.nativeElement as HTMLElement).querySelector('select') as HTMLSelectElement;
+    fixture.whenStable().then(() => expect(select.value).toBe('HIGH'));
+    expect(fixture.componentInstance.task?.priority).toBe('HIGH');
+  });
+
+  it('updates via TaskService.update with title, description and the new priority', () => {
+    taskService.get.and.returnValue(of(task));
+    taskService.update.and.returnValue(of({ ...task, priority: 'LOW' }));
+    setup('5');
+
+    fixture.componentInstance.changePriority('LOW');
+
+    expect(taskService.update).toHaveBeenCalledWith(5, 'Write report', 'Quarterly numbers', 'LOW');
+    expect(fixture.componentInstance.task?.priority).toBe('LOW');
+  });
+
+  it('shows an error when the priority update fails', () => {
+    taskService.get.and.returnValue(of(task));
+    taskService.update.and.returnValue(throwError(() => new Error('500')));
+    setup('5');
+
+    fixture.componentInstance.changePriority('HIGH');
+    fixture.detectChanges();
+
+    expect(text()).toContain('Could not update priority');
   });
 });

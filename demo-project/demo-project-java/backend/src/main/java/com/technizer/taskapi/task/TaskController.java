@@ -28,13 +28,13 @@ public class TaskController {
 
     @PostMapping
     public TaskResponse create(@AuthenticationPrincipal Long ownerId, @RequestBody CreateTaskRequest request) {
-        return TaskResponse.from(taskService.create(ownerId, request.title(), request.description()));
+        return TaskResponse.from(taskService.create(ownerId, request.title(), request.description(), request.priority()));
     }
 
     @PutMapping("/{id}")
     public TaskResponse update(@AuthenticationPrincipal Long ownerId, @PathVariable Long id,
                                @RequestBody UpdateTaskRequest request) {
-        return TaskResponse.from(taskService.update(ownerId, id, request.title(), request.description()));
+        return TaskResponse.from(taskService.update(ownerId, id, request.title(), request.description(), request.priority()));
     }
 
     @PatchMapping("/{id}/complete")
@@ -47,9 +47,9 @@ public class TaskController {
         taskService.delete(ownerId, id);
     }
 
-    public record CreateTaskRequest(@NotBlank String title, String description) {
+    public record CreateTaskRequest(@NotBlank String title, String description, TaskPriority priority) {
     }
 
-    public record UpdateTaskRequest(@NotBlank String title, String description) {
+    public record UpdateTaskRequest(@NotBlank String title, String description, TaskPriority priority) {
     }
 }

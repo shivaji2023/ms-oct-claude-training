@@ -25,12 +25,13 @@ public class TaskService {
                 .orElseThrow(() -> new NoSuchElementException("Task not found: " + taskId));
     }
 
-    public Task create(Long ownerId, String title, String description) {
+    public Task create(Long ownerId, String title, String description, TaskPriority priority) {
         Task task = new Task(title, description, ownerId);
+        task.setPriority(priority != null ? priority : TaskPriority.MEDIUM);
         return taskRepository.save(task);
     }
 
-    public Task update(Long ownerId, Long taskId, String title, String description) {
+    public Task update(Long ownerId, Long taskId, String title, String description, TaskPriority priority) {
         if (title == null || title.isBlank()) {
             throw new IllegalArgumentException("Title must not be blank");
         }
@@ -42,6 +43,9 @@ public class TaskService {
 
         task.setTitle(title);
         task.setDescription(description);
+        if (priority != null) {
+            task.setPriority(priority);
+        }
         return taskRepository.save(task);
     }
 

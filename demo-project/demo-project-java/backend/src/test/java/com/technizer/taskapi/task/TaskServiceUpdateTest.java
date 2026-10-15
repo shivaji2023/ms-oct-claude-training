@@ -31,7 +31,7 @@ class TaskServiceUpdateTest {
         when(taskRepository.findById(10L)).thenReturn(Optional.of(existing));
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        Task result = taskService.update(1L, 10L, "new title", "new description");
+        Task result = taskService.update(1L, 10L, "new title", "new description", null);
 
         assertThat(result.getTitle()).isEqualTo("new title");
         assertThat(result.getDescription()).isEqualTo("new description");
@@ -45,7 +45,7 @@ class TaskServiceUpdateTest {
         when(taskRepository.findById(10L)).thenReturn(Optional.of(existing));
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        Task result = taskService.update(1L, 10L, "title", null);
+        Task result = taskService.update(1L, 10L, "title", null, null);
 
         assertThat(result.getDescription()).isNull();
     }
@@ -54,7 +54,7 @@ class TaskServiceUpdateTest {
     void update_throwsNotFoundWhenTaskMissing() {
         when(taskRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> taskService.update(1L, 99L, "title", "desc"))
+        assertThatThrownBy(() -> taskService.update(1L, 99L, "title", "desc", null))
                 .isInstanceOf(NoSuchElementException.class);
         verify(taskRepository, never()).save(any());
     }
@@ -64,7 +64,7 @@ class TaskServiceUpdateTest {
         Task others = new Task("title", "desc", 2L);
         when(taskRepository.findById(10L)).thenReturn(Optional.of(others));
 
-        assertThatThrownBy(() -> taskService.update(1L, 10L, "hijacked", "desc"))
+        assertThatThrownBy(() -> taskService.update(1L, 10L, "hijacked", "desc", null))
                 .isInstanceOf(NoSuchElementException.class);
         assertThat(others.getTitle()).isEqualTo("title");
         verify(taskRepository, never()).save(any());
@@ -72,15 +72,50 @@ class TaskServiceUpdateTest {
 
     @Test
     void update_rejectsBlankTitle() {
-        assertThatThrownBy(() -> taskService.update(1L, 10L, "   ", "desc"))
+        assertThatThrownBy(() -> taskService.update(1L, 10L, "   ", "desc", null))
                 .isInstanceOf(IllegalArgumentException.class);
         verify(taskRepository, never()).save(any());
     }
 
     @Test
     void update_rejectsNullTitle() {
-        assertThatThrownBy(() -> taskService.update(1L, 10L, null, "desc"))
+        assertThatThrownBy(() -> taskService.update(1L, 10L, null, "desc", null))
                 .isInstanceOf(IllegalArgumentException.class);
+        verify(taskRepository, never()).save(any());
+    }
+
+    @Test
+    void update_appliesNewPriority() {
+        Task existing = new Task("title", "desc", 1L);
+        when(taskRepository.findById(10L)).thenReturn(Optional.of(existing));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Task result = taskService.update(1L, 10L, "title", "desc", TaskPriority.LOW);
+
+        assertThat(result.getPriority()).isEqualTo(TaskPriority.LOW);
+    }
+
+    @Test
+    void update_leavesPriorityUnchangedWhenNull() {
+        Task existing = new Task("title", "desc", 1L);
+        existing.setPriority(TaskPriority.HIGH);
+        when(taskRepository.findById(10L)).thenReturn(Optional.of(existing));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Task result = taskService.update(1L, 10L, "new", "desc", null);
+
+        assertThat(result.getPriority()).isEqualTo(TaskPriority.HIGH);
+    }
+
+    @Test
+    void update_priorityChangeByNonOwnerIsNotFoundAndLeavesPriority() {
+        Task others = new Task("title", "desc", 2L);
+        others.setPriority(TaskPriority.LOW);
+        when(taskRepository.findById(10L)).thenReturn(Optional.of(others));
+
+        assertThatThrownBy(() -> taskService.update(1L, 10L, "title", "desc", TaskPriority.HIGH))
+                .isInstanceOf(NoSuchElementException.class);
+        assertThat(others.getPriority()).isEqualTo(TaskPriority.LOW);
         verify(taskRepository, never()).save(any());
     }
 }

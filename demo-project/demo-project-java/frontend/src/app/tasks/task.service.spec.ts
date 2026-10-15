@@ -14,6 +14,7 @@ describe('TaskService', () => {
     completed: false,
     ownerId: 1,
     createdAt: '2026-10-13T09:30:00',
+    priority: 'MEDIUM',
   };
 
   beforeEach(() => {
@@ -46,5 +47,26 @@ describe('TaskService', () => {
       .expectOne('http://localhost:8080/api/tasks/99')
       .flush({ error: 'Task not found: 99' }, { status: 404, statusText: 'Not Found' });
     expect(status).toBe(404);
+  });
+
+  it('create() sends priority in the request body', () => {
+    service.create('t', 'd', 'HIGH').subscribe();
+
+    const req = httpMock.expectOne('http://localhost:8080/api/tasks');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ title: 't', description: 'd', priority: 'HIGH' });
+    req.flush({ ...task, priority: 'HIGH' });
+  });
+
+  it('update() PUTs title, description and priority', () => {
+    let result: Task | undefined;
+
+    service.update(5, 't', 'd', 'LOW').subscribe((t) => (result = t));
+
+    const req = httpMock.expectOne('http://localhost:8080/api/tasks/5');
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ title: 't', description: 'd', priority: 'LOW' });
+    req.flush({ ...task, priority: 'LOW' });
+    expect(result?.priority).toBe('LOW');
   });
 });

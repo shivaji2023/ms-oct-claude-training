@@ -1,12 +1,13 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { Task, TaskService } from './task.service';
+import { Task, TaskPriority, TaskService } from './task.service';
 
 @Component({
   selector: 'app-task-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink],
   template: `
     <div class="task-detail">
       <a routerLink="/tasks">&larr; Back to tasks</a>
@@ -22,6 +23,14 @@ import { Task, TaskService } from './task.service';
         <dl>
           <dt>Description</dt>
           <dd>{{ task.description || 'No description' }}</dd>
+          <dt>Priority</dt>
+          <dd>
+            <select [ngModel]="task.priority" (ngModelChange)="changePriority($event)" aria-label="Priority">
+              <option value="LOW">Low</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="HIGH">High</option>
+            </select>
+          </dd>
           <dt>Created</dt>
           <dd>{{ task.createdAt | date: 'medium' }}</dd>
         </dl>
@@ -67,6 +76,17 @@ export class TaskDetailComponent implements OnInit {
         this.error = 'Task not found';
         this.loading = false;
       },
+    });
+  }
+
+  changePriority(priority: TaskPriority): void {
+    if (!this.task) {
+      return;
+    }
+    const { id, title, description } = this.task;
+    this.taskService.update(id, title, description, priority).subscribe({
+      next: (updated) => (this.task = updated),
+      error: () => (this.error = 'Could not update priority'),
     });
   }
 }

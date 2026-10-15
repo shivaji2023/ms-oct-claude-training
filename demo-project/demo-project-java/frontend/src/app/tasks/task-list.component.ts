@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { Task, TaskService } from './task.service';
+import { Task, TaskPriority, TaskService } from './task.service';
 
 @Component({
   selector: 'app-task-list',
@@ -15,12 +15,18 @@ import { Task, TaskService } from './task.service';
       <div class="new-task">
         <input [(ngModel)]="newTitle" placeholder="Task title" />
         <input [(ngModel)]="newDescription" placeholder="Description" />
+        <select [(ngModel)]="newPriority" aria-label="Priority">
+          <option value="LOW">Low</option>
+          <option value="MEDIUM">Medium</option>
+          <option value="HIGH">High</option>
+        </select>
         <button (click)="addTask()">Add</button>
       </div>
 
       <ul>
         <li *ngFor="let task of tasks" [class.completed]="task.completed">
           <a [routerLink]="['/tasks', task.id]">{{ task.title }}</a>
+          <span class="priority" [attr.data-priority]="task.priority">{{ task.priority }}</span>
           <div class="actions">
             <button *ngIf="!task.completed" (click)="complete(task)">Complete</button>
             <button (click)="remove(task)">Delete</button>
@@ -44,6 +50,7 @@ export class TaskListComponent implements OnInit {
   tasks: Task[] = [];
   newTitle = '';
   newDescription = '';
+  newPriority: TaskPriority = 'MEDIUM';
 
   constructor(private taskService: TaskService) {}
 
@@ -59,9 +66,10 @@ export class TaskListComponent implements OnInit {
     if (!this.newTitle.trim()) {
       return;
     }
-    this.taskService.create(this.newTitle, this.newDescription).subscribe(() => {
+    this.taskService.create(this.newTitle, this.newDescription, this.newPriority).subscribe(() => {
       this.newTitle = '';
       this.newDescription = '';
+      this.newPriority = 'MEDIUM';
       this.refresh();
     });
   }

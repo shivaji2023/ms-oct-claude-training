@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -53,5 +54,24 @@ class TaskServiceTest {
         assertThat(result).isEmpty();
         verify(taskRepository).findByOwnerIdOrderByIdAsc(2L);
         verifyNoMoreInteractions(taskRepository);
+    }
+
+    @Test
+    void create_storesExplicitPriority() {
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Task result = taskService.create(1L, "title", "desc", TaskPriority.HIGH);
+
+        assertThat(result.getPriority()).isEqualTo(TaskPriority.HIGH);
+        assertThat(result.getOwnerId()).isEqualTo(1L);
+    }
+
+    @Test
+    void create_storesMediumWhenPriorityIsNull() {
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Task result = taskService.create(1L, "title", "desc", null);
+
+        assertThat(result.getPriority()).isEqualTo(TaskPriority.MEDIUM);
     }
 }
