@@ -1,6 +1,11 @@
 {
-    "model": "opusplan",
-    "env" : {
-        "PRETOOL_MODE": "log"
-    }
+  "env": {
+    "PRETOOL_MODE": "log"
+  },
+  "model": "opusplan",
+  "enabledMcpjsonServers": [
+    "atlassian",
+    "github",
+    "postgres"
+  ]
 }
