@@ -1,0 +1,61 @@
+{
+  "model": "opusplan",
+  "permissions": {
+    "allow": [
+      "Bash(mvn *)",
+      "Bash(npm run *)",
+      "Bash(git status)",
+      "Bash(git diff)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Read(**)",
+      "Write(backend/src/**)",
+      "Write(frontend/src/**)",
+      "Write(.claude/agent-memory/**)",
+      "Edit(.claude/agent-memory/**)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(npm install *)",
+      "Write(backend/pom.xml)",
+      "Write(frontend/package.json)"
+    ],
+    "deny": [
+      "Read(**/application.properties)",
+      "Read(**/*.key)",
+      "Bash(rm -rf:*)",
+      "Bash(curl:*)",
+      "Bash(wget:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "Which command to run"
+          },
+          {
+            "type": "prompt",
+            "prompt": "Which prompt to run"
+          },
+          {
+            "type": "http",
+            "url": "Which URL to send the request to"
+          },
+          {
+            "type": "agent",
+            "prompt": "Run the security-analyst to verify the intended command is safe to run"
+          },
+          {
+            "type": "mcp_tool",
+            "server": "MCP Server URL",
+            "tool": "MCP Tool Name"
+          }
+        ]
+      }
+    ]
+  }
+}
