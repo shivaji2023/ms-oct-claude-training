@@ -12,8 +12,10 @@ refactor, docs, chore, perf. Valid scopes are the module folders: auth, task,
 user, config (backend), and auth, tasks (frontend).
 
 First run git status to see what files are modified, untracked, or already
-staged. Then run git add -A to stage all changes. Then run git diff --staged
-to inspect exactly what has been staged. Base the commit message entirely on
+staged. Then stage only the files relevant to the change with git add <paths>
+— never run git add -A, and leave out unrelated files such as .claude/
+settings and local config copies. Then run git diff --staged to inspect
+exactly what has been staged. Base the commit message entirely on
 what you observe — do not guess or summarise from memory.
 
 Generate a Conventional Commits message for the staged changes.
@@ -23,15 +25,20 @@ Format:
 
   - Bullet point explaining what changed and why, not how
   - One bullet per logical change group
-  - Reference issue numbers if visible in the diff (e.g. closes #204)
+  - Reference issue numbers if visible in the diff (e.g. closes #204) or Jira
+    keys (e.g. TASK-2)
+
+Do not add a Co-Authored-By trailer or any reference to Claude in the commit
+message.
 
 Once the commit message is ready:
 
 1. Check the current branch with git branch --show-current.
 2. If the current branch is main or master, look for an issue number in the
-   staged diff or commit message (e.g. "closes #204" or "#204"). If found,
-   create and switch to a branch named fix/issue-<number> using
-   git checkout -b fix/issue-<number>. If no issue number is found, create a
+   staged diff or commit message (e.g. "closes #204" or "#204") or a Jira key
+   (e.g. "TASK-2"). If a number is found, create and switch to a branch named
+   fix/issue-<number> using git checkout -b fix/issue-<number>. If a Jira key
+   is found, use fix/<key> (e.g. fix/TASK-2). If no issue number is found, create a
    branch named fix/<scope>-<short-summary> derived from the commit message.
 3. Run git commit -m "<message>" to commit on that branch.
 4. Run git push -u origin <branch-name> to push the branch to the remote.

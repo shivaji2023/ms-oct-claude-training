@@ -12,7 +12,10 @@ Steps:
 2. Run git log main..HEAD --oneline to list all commits on this branch.
 3. Run git diff main...HEAD to inspect all changes introduced by this branch.
 4. Check if the branch name or commits reference an issue number (e.g.
-   fix/issue-204 or "closes #204"). Extract it if present.
+   fix/issue-204 or "closes #204") or a Jira key (e.g. fix/TASK-2 or
+   "TASK-2"). Extract it if present.
+5. Run gh auth status. If gh is not authenticated, stop and tell me instead of
+   continuing.
 
 Using what you observe, generate a PR title and body:
 
@@ -24,7 +27,8 @@ Body format:
   - Bullet points describing each logical change
 
   ## Why it changed
-  - The problem or issue this PR resolves (reference issue number if found)
+  - The problem or issue this PR resolves (reference issue number or Jira
+    key if found)
 
   ## How to test
   - Step-by-step instructions to verify the fix or feature works

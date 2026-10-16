@@ -9,8 +9,15 @@
       "Bash(npm run *)",
       "Bash(git status)",
       "Bash(git diff)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git branch *)",
+      "Bash(git checkout -b *)",
       "Bash(git add *)",
       "Bash(git commit *)",
+      "Bash(gh auth status)",
+      "mcp__atlassian__createJiraIssue",
+      "mcp__atlassian__getJiraIssue",
       "Read(**)",
       "Write(backend/src/**)",
       "Write(frontend/src/**)",
@@ -36,10 +43,6 @@
       {
         "matcher": "Bash|PowerShell",
         "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.js\""
-          },
           {
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/pretooluse-demo.js\""

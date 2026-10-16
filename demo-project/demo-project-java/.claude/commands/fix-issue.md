@@ -1,6 +1,7 @@
 ---
 name: fix-issue
 description: Fix a tracked issue with minimal, surgical changes
+argument-hint: <github|jira> <issue number or key>
 disable-model-invocation: true
 ---
 
@@ -12,7 +13,16 @@ via Bean Validation annotations, business logic lives in @Service classes,
 and GlobalExceptionHandler maps exceptions to HTTP responses. Never leak
 internal error details to clients.
 
-Look up issue #$ARGUMENTS via the GitHub (or Jira) MCP tool and fix it.
+Arguments: $ARGUMENTS — format `<tracker> <issue>`, where tracker is "github"
+or "jira" (default "github" if only an issue is given).
+
+- github → issue number, e.g. `github 12`; use the GitHub MCP tool, repo
+  `synechron-data/ms-oct-claude-training`
+- jira → issue key, e.g. `jira TASK-2`; use the Atlassian MCP tool, project
+  `TASK` (site `technizeredge.atlassian.net`)
+
+Look up that issue in only the chosen tracker and fix it. If the chosen
+tracker's MCP server is unavailable, stop and tell me instead of falling back.
 
 Steps:
 1. Understand exactly what the issue describes
