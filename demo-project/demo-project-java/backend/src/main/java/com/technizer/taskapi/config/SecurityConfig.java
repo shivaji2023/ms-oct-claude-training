@@ -39,7 +39,15 @@ public class SecurityConfig {
         .csrf(csrf -> csrf.disable())
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
-            auth -> auth.requestMatchers("/api/auth/**").permitAll().anyRequest().authenticated())
+            auth ->
+                auth.requestMatchers("/api/auth/**")
+                    .permitAll()
+                    // The H2 console must never be reachable through this chain: any visitor can
+                    // self-register for a JWT, so "authenticated" is not a sufficient guard.
+                    .requestMatchers("/h2-console/**")
+                    .denyAll()
+                    .anyRequest()
+                    .authenticated())
         .addFilterBefore(authRateLimitFilter, UsernamePasswordAuthenticationFilter.class)
         .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 

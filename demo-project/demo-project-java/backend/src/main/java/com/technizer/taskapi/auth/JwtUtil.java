@@ -20,7 +20,9 @@ public class JwtUtil {
   public JwtUtil(
       @Value("${app.jwt.secret}") String secret,
       @Value("${app.jwt.expiry-minutes:60}") long expiryMinutes) {
-    if (secret == null || secret.getBytes(StandardCharsets.UTF_8).length < MIN_SECRET_BYTES) {
+    if (secret == null
+        || secret.isBlank()
+        || secret.getBytes(StandardCharsets.UTF_8).length < MIN_SECRET_BYTES) {
       throw new IllegalStateException(
           "app.jwt.secret must be set and at least " + MIN_SECRET_BYTES + " bytes");
     }
