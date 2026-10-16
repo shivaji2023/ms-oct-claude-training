@@ -1,4 +1,5 @@
 - [application.properties access denied](application-properties-access-denied.md) — file is deny-listed; report secret/H2 findings as unverified, never bypass
 - [JWT expiry enforced by jjwt parse](jwt-expiry-enforced-by-jjwt-parse.md) — isTokenValid stub is Medium not Critical; jjwt still throws on exp
 - [Deliberate training bugs](deliberate-training-bugs.md) — README-listed intentional bugs plus other known auth findings as of 2026-10-14
+- [H2 console auth-only is not a fix](h2-console-auth-only-is-not-a-fix.md) — any self-registered user reaches it; MockMvc can't test the H2 servlet
 - [Shell command restriction](shell-command-restriction.md) — only mvn dependency:tree; no git/other shell commands
